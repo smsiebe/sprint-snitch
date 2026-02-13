@@ -9,6 +9,7 @@ finally synthesizes an overall sprint narrative.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Callable
 
 from sprint_snitch.llm_integration.fabric_bridge import FabricBridge
@@ -28,6 +29,13 @@ from sprint_snitch.models.data import (
 logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[int, int, str], None]
+
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+
+def _strip_think_blocks(text: str) -> str:
+    """Remove ``<think>…</think>`` reasoning blocks from LLM output."""
+    return _THINK_RE.sub("", text).strip()
 
 
 class SprintSummarizer:
@@ -71,7 +79,9 @@ class SprintSummarizer:
         """
         prompt = build_contributor_prompt(author.name, author, file_contents)
         result = self._bridge.execute(prompt, on_model_tried)
-        return result or "(Qualitative summary unavailable)"
+        if result:
+            return _strip_think_blocks(result)
+        return "(Qualitative summary unavailable)"
 
     def summarize_repo(
         self,
@@ -97,7 +107,9 @@ class SprintSummarizer:
         """
         prompt = build_repo_prompt(analysis.repo_name, analysis, file_contents)
         result = self._bridge.execute(prompt, on_model_tried)
-        return result or "(Qualitative summary unavailable)"
+        if result:
+            return _strip_think_blocks(result)
+        return "(Qualitative summary unavailable)"
 
     def generate_sprint_narrative(
         self,
@@ -123,7 +135,9 @@ class SprintSummarizer:
         """
         prompt = build_sprint_narrative_prompt(repo_summaries, contributor_summaries)
         result = self._bridge.execute(prompt, on_model_tried)
-        return result or "(Sprint narrative unavailable)"
+        if result:
+            return _strip_think_blocks(result)
+        return "(Sprint narrative unavailable)"
 
     # ------------------------------------------------------------------
     # Full pipeline

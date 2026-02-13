@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from sprint_snitch.models.data import SprintReport
 from sprint_snitch.reporting.markdown_export import render_markdown, save_markdown
+from sprint_snitch.reporting.pdf_export import save_pdf
 
 
 class ReportViewer(QWidget):
@@ -69,6 +70,10 @@ class ReportViewer(QWidget):
         self._export_btn.setEnabled(False)
         btn_row.addWidget(self._export_btn)
 
+        self._export_pdf_btn = QPushButton("Export to PDF...")
+        self._export_pdf_btn.setEnabled(False)
+        btn_row.addWidget(self._export_pdf_btn)
+
         self._copy_btn = QPushButton("Copy to Clipboard")
         self._copy_btn.setEnabled(False)
         btn_row.addWidget(self._copy_btn)
@@ -81,6 +86,7 @@ class ReportViewer(QWidget):
 
     def _wire_signals(self) -> None:
         self._export_btn.clicked.connect(self._on_export)
+        self._export_pdf_btn.clicked.connect(self._on_export_pdf)
         self._copy_btn.clicked.connect(self._on_copy)
 
     # ------------------------------------------------------------------
@@ -93,6 +99,7 @@ class ReportViewer(QWidget):
         self._rendered_text = render_markdown(report)
         self._text_view.setPlainText(self._rendered_text)
         self._export_btn.setEnabled(True)
+        self._export_pdf_btn.setEnabled(True)
         self._copy_btn.setEnabled(True)
 
     def reset(self) -> None:
@@ -101,6 +108,7 @@ class ReportViewer(QWidget):
         self._rendered_text = ""
         self._text_view.clear()
         self._export_btn.setEnabled(False)
+        self._export_pdf_btn.setEnabled(False)
         self._copy_btn.setEnabled(False)
 
     # ------------------------------------------------------------------
@@ -134,6 +142,35 @@ class ReportViewer(QWidget):
                 self,
                 "Export Failed",
                 f"Could not save report:\n{exc}",
+            )
+
+    def _on_export_pdf(self) -> None:
+        """Open a file dialog and save the rendered PDF."""
+        if not self._report:
+            return
+
+        default_name = "sprint_report.pdf"
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Sprint Report as PDF",
+            default_name,
+            "PDF Files (*.pdf);;All Files (*)",
+        )
+        if not path:
+            return  # user cancelled
+
+        try:
+            save_pdf(self._report, Path(path))
+            QMessageBox.information(
+                self,
+                "Export Successful",
+                f"Report saved to:\n{path}",
+            )
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Export Failed",
+                f"Could not save PDF report:\n{exc}",
             )
 
     def _on_copy(self) -> None:

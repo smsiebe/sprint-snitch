@@ -18,13 +18,44 @@ class GitError(Exception):
         super().__init__(message)
 
 
+def _normalize_repo_url(raw: str) -> str:
+    """Normalise a user-supplied repo identifier into a cloneable URL.
+
+    Handles two common paste artefacts:
+
+    * GitHub shorthand with an appended description, e.g.
+      ``"owner/repo: Some description text"`` → ``"https://github.com/owner/repo.git"``
+    * Plain ``"owner/repo"`` shorthand (no description)
+      → ``"https://github.com/owner/repo.git"``
+
+    Full HTTPS / SSH URLs are returned unchanged.
+    """
+    raw = raw.strip()
+
+    # Already a full URL — return as-is.
+    if re.match(r"^(https?://|git@)", raw):
+        return raw
+
+    # Shorthand: strip everything from the first colon-space onward
+    # ("owner/repo: description …" → "owner/repo").
+    slug = re.split(r":\s", raw, maxsplit=1)[0].strip()
+
+    # Validate that we now have a plausible "owner/repo" slug.
+    if re.fullmatch(r"[A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+", slug):
+        return f"https://github.com/{slug}.git"
+
+    # Not recognisable — return original input and let git report the error.
+    return raw
+
+
 def clone_or_fetch(repo_url: str, work_dir: str | None = None) -> Path:
     """Clone a repository, or fetch updates if it already exists locally.
 
     Parameters
     ----------
     repo_url:
-        Remote git URL (HTTPS or SSH).
+        Remote git URL (HTTPS or SSH), or GitHub ``owner/repo`` shorthand
+        (with an optional trailing description that will be stripped).
     work_dir:
         Parent directory for the local clone.  A temp directory is created
         when *None*.
@@ -39,6 +70,8 @@ def clone_or_fetch(repo_url: str, work_dir: str | None = None) -> Path:
     GitError
         If any git subprocess exits with a non-zero return code.
     """
+    repo_url = _normalize_repo_url(repo_url)
+
     if work_dir is None:
         work_dir = tempfile.mkdtemp(prefix="sprint_snitch_")
 

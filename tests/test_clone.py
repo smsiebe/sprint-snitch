@@ -5,7 +5,51 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sprint_snitch.git_analysis.clone import GitError, _repo_dir_name, clone_or_fetch
+from sprint_snitch.git_analysis.clone import (
+    GitError,
+    _normalize_repo_url,
+    _repo_dir_name,
+    clone_or_fetch,
+)
+
+
+# -- _normalize_repo_url tests ------------------------------------------------
+
+
+def test_normalize_full_https_url():
+    """Full HTTPS URLs should pass through unchanged."""
+    url = "https://github.com/org/repo.git"
+    assert _normalize_repo_url(url) == url
+
+
+def test_normalize_full_ssh_url():
+    """Full SSH URLs should pass through unchanged."""
+    url = "git@github.com:org/repo.git"
+    assert _normalize_repo_url(url) == url
+
+
+def test_normalize_shorthand_owner_repo():
+    """Plain owner/repo shorthand should expand to HTTPS GitHub URL."""
+    assert _normalize_repo_url("smsiebe/sprint-snitch") == (
+        "https://github.com/smsiebe/sprint-snitch.git"
+    )
+
+
+def test_normalize_shorthand_with_description():
+    """owner/repo with appended description should strip the description."""
+    raw = 'smsiebe/sprint-snitch: Application to automatically create an "end of sprint" report'
+    assert _normalize_repo_url(raw) == (
+        "https://github.com/smsiebe/sprint-snitch.git"
+    )
+
+
+def test_normalize_strips_whitespace():
+    assert _normalize_repo_url("  org/repo  ") == (
+        "https://github.com/org/repo.git"
+    )
+
+
+# -- _repo_dir_name tests -----------------------------------------------------
 
 
 def test_repo_dir_name_https():
