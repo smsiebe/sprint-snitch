@@ -145,6 +145,49 @@ def test_render_special_characters():
     assert "\\*" in md
 
 
+def test_render_contributor_per_repo_table():
+    """Contributor section should include a per-repository breakdown table."""
+    report = _make_full_report()
+    md = render_markdown(report)
+    assert "| Repository | Lines Added | Lines Removed |" in md
+    assert "myrepo" in md
+
+
+def test_render_contributor_multi_repo():
+    """With 2 repos, contributor table shows per-repo breakdown."""
+    am1 = AuthorMetrics(name="Alice", email="a@e.com", lines_added=150, lines_removed=30)
+    am2 = AuthorMetrics(name="Alice", email="a@e.com", lines_added=50, lines_removed=20)
+    a1 = RepoAnalysis(
+        repo_url="u1", repo_name="repo-a",
+        date_from=datetime(2025, 1, 1), date_to=datetime(2025, 1, 14),
+        authors={"a@e.com": am1},
+    )
+    a2 = RepoAnalysis(
+        repo_url="u2", repo_name="repo-b",
+        date_from=datetime(2025, 1, 1), date_to=datetime(2025, 1, 14),
+        authors={"a@e.com": am2},
+    )
+    merged = AuthorMetrics(
+        name="Alice", email="a@e.com", lines_added=200, lines_removed=50,
+    )
+    cs = ContributorSummary(name="Alice", email="a@e.com", metrics=merged)
+    report = _make_report(
+        repos=[
+            RepoSummary(repo_url="u1", repo_name="repo-a", analysis=a1),
+            RepoSummary(repo_url="u2", repo_name="repo-b", analysis=a2),
+        ],
+        contributors=[cs],
+    )
+    md = render_markdown(report)
+    assert "| Repository | Lines Added | Lines Removed |" in md
+    assert "repo-a" in md
+    assert "repo-b" in md
+    assert "+150" in md
+    assert "-30" in md
+    assert "+50" in md
+    assert "-20" in md
+
+
 def test_save_markdown_writes_file(tmp_path):
     report = _make_full_report()
     out = tmp_path / "report.md"

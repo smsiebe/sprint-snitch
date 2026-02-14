@@ -235,6 +235,48 @@ def test_render_html_contributor_section():
     assert "Alice focused on backend improvements." in html
 
 
+def test_render_html_contributor_per_repo_table():
+    """Contributor section should include a per-repository breakdown table."""
+    report = _make_full_report()
+    html = render_html(report)
+    assert "Repository" in html
+    assert "myrepo" in html
+
+
+def test_render_html_contributor_multi_repo():
+    """With 2 repos, contributor table shows per-repo breakdown."""
+    am1 = AuthorMetrics(name="Alice", email="a@e.com", lines_added=150, lines_removed=30)
+    am2 = AuthorMetrics(name="Alice", email="a@e.com", lines_added=50, lines_removed=20)
+    a1 = RepoAnalysis(
+        repo_url="u1", repo_name="repo-a",
+        date_from=datetime(2025, 1, 1), date_to=datetime(2025, 1, 14),
+        authors={"a@e.com": am1},
+    )
+    a2 = RepoAnalysis(
+        repo_url="u2", repo_name="repo-b",
+        date_from=datetime(2025, 1, 1), date_to=datetime(2025, 1, 14),
+        authors={"a@e.com": am2},
+    )
+    merged = AuthorMetrics(
+        name="Alice", email="a@e.com", lines_added=200, lines_removed=50,
+    )
+    cs = ContributorSummary(name="Alice", email="a@e.com", metrics=merged)
+    report = _make_report(
+        repos=[
+            RepoSummary(repo_url="u1", repo_name="repo-a", analysis=a1),
+            RepoSummary(repo_url="u2", repo_name="repo-b", analysis=a2),
+        ],
+        contributors=[cs],
+    )
+    html = render_html(report)
+    assert "repo-a" in html
+    assert "repo-b" in html
+    assert "+150" in html
+    assert "-30" in html
+    assert "+50" in html
+    assert "-20" in html
+
+
 def test_render_html_activity_overview():
     report = _make_full_report()
     html = render_html(report)

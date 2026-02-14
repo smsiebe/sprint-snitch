@@ -109,11 +109,11 @@ def _render_contributor_sections(report: SprintReport) -> str:
         return ""
     parts = ["## Contributors"]
     for cs in report.contributors:
-        parts.append(_render_single_contributor(cs))
+        parts.append(_render_single_contributor(cs, report))
     return "\n\n".join(parts)
 
 
-def _render_single_contributor(cs: ContributorSummary) -> str:
+def _render_single_contributor(cs: ContributorSummary, report: SprintReport) -> str:
     m = cs.metrics
     lines = [
         f"### {_escape_md(cs.name)}",
@@ -126,6 +126,22 @@ def _render_single_contributor(cs: ContributorSummary) -> str:
             ],
         ),
     ]
+    # Per-repository breakdown
+    repo_rows = []
+    for rs in report.repos:
+        author = rs.analysis.authors.get(cs.email)
+        if author:
+            repo_rows.append([
+                rs.repo_name,
+                f"+{author.lines_added}",
+                f"-{author.lines_removed}",
+            ])
+    if repo_rows:
+        lines.append("")
+        lines.append(_render_metrics_table(
+            ["Repository", "Lines Added", "Lines Removed"],
+            repo_rows,
+        ))
     if cs.qualitative_summary:
         lines.append("")
         lines.append(cs.qualitative_summary)

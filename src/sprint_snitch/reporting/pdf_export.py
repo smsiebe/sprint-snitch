@@ -187,11 +187,11 @@ def _render_html_contributor_sections(report: SprintReport) -> str:
         return ""
     parts = ["<h2>Contributors</h2>"]
     for cs in report.contributors:
-        parts.append(_render_single_contributor(cs))
+        parts.append(_render_single_contributor(cs, report))
     return "\n".join(parts)
 
 
-def _render_single_contributor(cs: ContributorSummary) -> str:
+def _render_single_contributor(cs: ContributorSummary, report: SprintReport) -> str:
     m = cs.metrics
     parts = [
         f"<h3>{_escape(cs.name)}</h3>",
@@ -203,6 +203,21 @@ def _render_single_contributor(cs: ContributorSummary) -> str:
             ],
         ),
     ]
+    # Per-repository breakdown
+    repo_rows = []
+    for rs in report.repos:
+        author = rs.analysis.authors.get(cs.email)
+        if author:
+            repo_rows.append([
+                rs.repo_name,
+                f"+{author.lines_added}",
+                f"-{author.lines_removed}",
+            ])
+    if repo_rows:
+        parts.append(_render_html_table(
+            ["Repository", "Lines Added", "Lines Removed"],
+            repo_rows,
+        ))
     if cs.qualitative_summary:
         parts.append(_narrative_to_html(cs.qualitative_summary))
     return "\n".join(parts)
