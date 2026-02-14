@@ -4,15 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sprint_snitch.git_analysis.enrichment import (
-    merge_change_type_stats,
-    merge_commit_categories,
-    merge_daily_activity,
-    merge_file_type_breakdowns,
-)
 from sprint_snitch.models.data import (
     AuthorMetrics,
-    ChangeTypeStats,
     ContributorSummary,
     RepoAnalysis,
     RepoSummary,
@@ -69,47 +62,16 @@ def merge_contributors_across_repos(
         for email, author in analysis.authors.items():
             if email in merged:
                 existing = merged[email]
-                existing.commit_count += author.commit_count
                 existing.lines_added += author.lines_added
                 existing.lines_removed += author.lines_removed
-                # Union of files_touched
-                existing_files = set(existing.files_touched)
-                for f in author.files_touched:
-                    if f not in existing_files:
-                        existing.files_touched.append(f)
-                        existing_files.add(f)
                 existing.commits.extend(author.commits)
-                # Merge enrichment fields
-                existing.file_type_breakdown = merge_file_type_breakdowns(
-                    existing.file_type_breakdown, author.file_type_breakdown,
-                )
-                existing.commit_categories = merge_commit_categories(
-                    existing.commit_categories, author.commit_categories,
-                )
-                existing.daily_activity = merge_daily_activity(
-                    existing.daily_activity, author.daily_activity,
-                )
-                existing.change_type_stats = merge_change_type_stats(
-                    existing.change_type_stats, author.change_type_stats,
-                )
             else:
                 merged[email] = AuthorMetrics(
                     name=author.name,
                     email=author.email,
-                    commit_count=author.commit_count,
-                    files_touched=list(author.files_touched),
                     lines_added=author.lines_added,
                     lines_removed=author.lines_removed,
                     commits=list(author.commits),
-                    file_type_breakdown=list(author.file_type_breakdown),
-                    commit_categories=list(author.commit_categories),
-                    daily_activity=list(author.daily_activity),
-                    change_type_stats=ChangeTypeStats(
-                        files_added=author.change_type_stats.files_added,
-                        files_modified=author.change_type_stats.files_modified,
-                        files_deleted=author.change_type_stats.files_deleted,
-                        files_renamed=author.change_type_stats.files_renamed,
-                    ),
                 )
 
     return merged

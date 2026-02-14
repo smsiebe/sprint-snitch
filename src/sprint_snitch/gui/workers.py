@@ -12,10 +12,11 @@ import logging
 import tempfile
 from datetime import datetime
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QMutex, QObject, QWaitCondition, Signal
 
 from sprint_snitch.git_analysis.clone import clone_or_fetch
 from sprint_snitch.git_analysis.diff_extractor import extract_commits
+from sprint_snitch.git_analysis.identity import apply_identity_mapping, discover_identities
 from sprint_snitch.git_analysis.metrics import compute_repo_analysis
 from sprint_snitch.llm_integration.fabric_bridge import FabricBridge
 from sprint_snitch.llm_integration.summarizer import SprintSummarizer
@@ -44,6 +45,9 @@ class AnalysisWorker(QObject):
         Emitted after a repository has been cloned or fetched.
     repo_analyzed(repo_url)
         Emitted after commit extraction and metrics computation for a repo.
+    identities_discovered(identities, all_commits)
+        Emitted after commit extraction with discovered contributor identities.
+        The worker then **blocks** until :meth:`set_identity_mapping` is called.
     llm_progress(description)
         Description of the current LLM summarization step.
     model_tried(role, model_id, success, elapsed)
@@ -57,6 +61,7 @@ class AnalysisWorker(QObject):
     progress = Signal(int, int, str)           # (current_step, total_steps, message)
     repo_cloned = Signal(str)                  # repo_url
     repo_analyzed = Signal(str)                # repo_url
+    identities_discovered = Signal(object, object)  # (list[DiscoveredIdentity], dict)
     llm_progress = Signal(str)                 # description of current LLM call
     model_tried = Signal(str, str, bool, float)  # (role, model_id, success, elapsed)
     finished = Signal(object)                  # SprintReport
@@ -78,6 +83,26 @@ class AnalysisWorker(QObject):
         self._config_path = config_path
         self._use_llm = use_llm
         self._work_dir = work_dir
+
+        # Synchronisation for contributor reconciliation pause.
+        self._identity_mutex = QMutex()
+        self._identity_wait = QWaitCondition()
+        self._identity_mapping: dict[str, tuple[str, str]] | None = None
+
+    # ------------------------------------------------------------------
+    # Public API (called from main thread)
+    # ------------------------------------------------------------------
+
+    def set_identity_mapping(self, mapping: dict[str, tuple[str, str]]) -> None:
+        """Resume the worker with the user's identity mapping.
+
+        Called from the main thread after the contributor reconciliation
+        dialog closes.  An empty dict means "accept as-is".
+        """
+        self._identity_mutex.lock()
+        self._identity_mapping = mapping
+        self._identity_wait.wakeAll()
+        self._identity_mutex.unlock()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -105,12 +130,13 @@ class AnalysisWorker(QObject):
 
             # Step budget:
             #   clone steps = len(repos)
+            #   extract steps = len(repos)
             #   analyze steps = len(repos)
             #   LLM steps are dynamic (calculated after analysis) but we add a
             #   placeholder of 1 here so the bar isn't stuck at 100% during LLM.
             n_repos = len(repos)
             llm_placeholder = 1 if self._use_llm else 0
-            total_steps = n_repos * 2 + llm_placeholder
+            total_steps = n_repos * 3 + llm_placeholder
             current_step = 0
 
             # -- Phase 1: Clone / fetch ----------------------------------------
@@ -125,7 +151,35 @@ class AnalysisWorker(QObject):
                 repo_paths[url] = str(repo_path)
                 self.repo_cloned.emit(url)
 
-            # -- Phase 2: Extract commits + compute metrics --------------------
+            # -- Phase 2a: Extract commits from all repos ----------------------
+            from pathlib import Path
+
+            all_commits: dict[str, list] = {}  # url -> list[CommitInfo]
+
+            for url in repos:
+                current_step += 1
+                self.progress.emit(current_step, total_steps, f"Extracting {url}")
+                logger.info("Extracting commits from %s", url)
+
+                repo_path = Path(repo_paths[url])
+                commits = extract_commits(repo_path, self._date_from, self._date_to)
+                all_commits[url] = commits
+
+            # -- Phase 2b: Contributor reconciliation (pause for GUI) ----------
+            identities = discover_identities(all_commits)
+            self.identities_discovered.emit(identities, all_commits)
+
+            # Block until the main thread calls set_identity_mapping().
+            self._identity_mutex.lock()
+            while self._identity_mapping is None:
+                self._identity_wait.wait(self._identity_mutex)
+            mapping = self._identity_mapping
+            self._identity_mapping = None  # reset for potential reuse
+            self._identity_mutex.unlock()
+
+            apply_identity_mapping(all_commits, mapping)
+
+            # -- Phase 2c: Compute metrics on (possibly rewritten) commits -----
             analyses: list[RepoAnalysis] = []
 
             for url in repos:
@@ -133,11 +187,8 @@ class AnalysisWorker(QObject):
                 self.progress.emit(current_step, total_steps, f"Analyzing {url}")
                 logger.info("Analyzing %s", url)
 
-                from pathlib import Path
-                repo_path = Path(repo_paths[url])
-                commits = extract_commits(repo_path, self._date_from, self._date_to)
                 analysis = compute_repo_analysis(
-                    url, commits, self._date_from, self._date_to
+                    url, all_commits[url], self._date_from, self._date_to
                 )
                 analyses.append(analysis)
                 self.repo_analyzed.emit(url)
@@ -157,13 +208,13 @@ class AnalysisWorker(QObject):
                     llm_steps = sum(
                         len(a.authors) + 1 for a in analyses
                     ) + 1  # +1 for narrative
-                    total_steps = n_repos * 2 + llm_steps
+                    total_steps = n_repos * 3 + llm_steps
 
                     def _on_llm_progress(
                         llm_current: int, llm_total: int, description: str
                     ) -> None:
                         nonlocal current_step
-                        current_step = n_repos * 2 + llm_current
+                        current_step = n_repos * 3 + llm_current
                         self.progress.emit(current_step, total_steps, description)
                         self.llm_progress.emit(description)
 

@@ -13,19 +13,16 @@ from sprint_snitch.models.data import (
     AuthorMetrics,
     ChangeTypeStats,
     ChurnedFile,
-    CommitCategory,
     CommitInfo,
     DailyActivity,
     FileChange,
-    FileTypeBreakdown,
     RepoAnalysis,
 )
 
 
-def _make_metrics(name="Alice", email="a@e.com", commit_count=3, lines_added=100, lines_removed=20):
+def _make_metrics(name="Alice", email="a@e.com", lines_added=100, lines_removed=20):
     return AuthorMetrics(
-        name=name, email=email, commit_count=commit_count,
-        files_touched=["main.py", "utils.py"],
+        name=name, email=email,
         lines_added=lines_added, lines_removed=lines_removed,
     )
 
@@ -37,9 +34,8 @@ def test_contributor_prompt_contains_name():
 
 
 def test_contributor_prompt_contains_metrics():
-    metrics = _make_metrics(commit_count=5, lines_added=200, lines_removed=30)
+    metrics = _make_metrics(lines_added=200, lines_removed=30)
     prompt = build_contributor_prompt("Alice", metrics, {})
-    assert "5" in prompt  # commit count
     assert "200" in prompt  # lines added
     assert "30" in prompt  # lines removed
 
@@ -108,30 +104,8 @@ def test_build_file_context_budget():
 
 
 # ---------------------------------------------------------------------------
-# Analytics enrichment in prompts
+# Analytics enrichment in prompts (repo-level only)
 # ---------------------------------------------------------------------------
-
-
-def test_contributor_prompt_includes_file_types():
-    metrics = _make_metrics()
-    metrics.file_type_breakdown = [
-        FileTypeBreakdown("Python", ".py", 2, 80, 15, 3),
-        FileTypeBreakdown("JavaScript", ".js", 1, 20, 5, 1),
-    ]
-    prompt = build_contributor_prompt("Alice", metrics, {})
-    assert "Work by File Type" in prompt
-    assert "Python" in prompt
-
-
-def test_contributor_prompt_includes_categories():
-    metrics = _make_metrics()
-    metrics.commit_categories = [
-        CommitCategory("feat", 2),
-        CommitCategory("fix", 1),
-    ]
-    prompt = build_contributor_prompt("Alice", metrics, {})
-    assert "Commit Categories" in prompt
-    assert "features" in prompt
 
 
 def test_repo_prompt_includes_timeline_context():

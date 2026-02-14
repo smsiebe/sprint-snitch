@@ -66,8 +66,112 @@ def extract_commits(
         )
 
     commits = _parse_git_log(result.stdout)
+    change_types = _get_change_type_map(repo_path, date_from, date_to)
+    _apply_change_types(commits, change_types)
     _enrich_with_file_content(repo_path, commits)
     return commits
+
+
+# ---------------------------------------------------------------------------
+# Change type detection (--name-status)
+# ---------------------------------------------------------------------------
+
+_NAME_STATUS_MAP: dict[str, str] = {
+    "A": "added",
+    "M": "modified",
+    "D": "deleted",
+    "T": "modified",  # type change (e.g. file → symlink)
+}
+
+
+def _get_change_type_map(
+    repo_path: Path,
+    date_from: datetime,
+    date_to: datetime,
+) -> dict[tuple[str, str], str]:
+    """Run ``git log --name-status`` to get the actual change type per file.
+
+    Returns a mapping of ``(sha, filepath) -> change_type`` where change_type
+    is one of ``"added"``, ``"modified"``, ``"deleted"``, ``"renamed"``.
+    """
+    after_str = date_from.date().isoformat()
+    before_str = (date_to.date() + timedelta(days=1)).isoformat()
+
+    fmt = f"{_COMMIT_SEP}%nsha:%H"
+
+    result = subprocess.run(
+        [
+            "git", "log",
+            f"--format={fmt}",
+            "--name-status",
+            f"--after={after_str}",
+            f"--before={before_str}",
+            "--all",
+        ],
+        cwd=str(repo_path),
+        capture_output=True,
+        text=True,
+        timeout=120,
+        errors="replace",
+    )
+
+    if result.returncode != 0:
+        return {}  # Graceful degradation — fall back to "modified" default
+
+    return _parse_name_status_output(result.stdout)
+
+
+def _parse_name_status_output(raw_output: str) -> dict[tuple[str, str], str]:
+    """Parse ``git log --name-status`` output into a ``(sha, path) -> change_type`` map."""
+    change_map: dict[tuple[str, str], str] = {}
+    current_sha = ""
+
+    blocks = raw_output.split(_COMMIT_SEP)
+    for block in blocks:
+        block = block.strip()
+        if not block:
+            continue
+
+        current_sha = ""
+        for line in block.splitlines():
+            if line.startswith("sha:"):
+                current_sha = line[4:]
+                continue
+
+            if not current_sha or not line.strip():
+                continue
+
+            parts = line.split("\t")
+            if len(parts) < 2:
+                continue
+
+            status = parts[0]
+
+            # Renames and copies: R### or C### followed by old_path \t new_path
+            if status.startswith(("R", "C")):
+                change_type = "renamed" if status.startswith("R") else "added"
+                filepath = parts[2] if len(parts) >= 3 else parts[1]
+            elif status in _NAME_STATUS_MAP:
+                change_type = _NAME_STATUS_MAP[status]
+                filepath = parts[1]
+            else:
+                continue
+
+            change_map[(current_sha, filepath)] = change_type
+
+    return change_map
+
+
+def _apply_change_types(
+    commits: list[CommitInfo],
+    change_map: dict[tuple[str, str], str],
+) -> None:
+    """Apply change types from ``--name-status`` to parsed commits in-place."""
+    for commit in commits:
+        for fc in commit.files:
+            key = (commit.sha, fc.path)
+            if key in change_map:
+                fc.change_type = change_map[key]
 
 
 # ---------------------------------------------------------------------------

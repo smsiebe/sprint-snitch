@@ -36,10 +36,9 @@ def test_compute_author_metrics_single_author():
     result = compute_author_metrics(commits)
     assert len(result) == 1
     m = result["a@e.com"]
-    assert m.commit_count == 3
     assert m.lines_added == 18
     assert m.lines_removed == 3
-    assert set(m.files_touched) == {"x.py", "y.py"}
+    assert len(m.commits) == 3
 
 
 def test_compute_author_metrics_multiple_authors():
@@ -51,8 +50,8 @@ def test_compute_author_metrics_multiple_authors():
     assert len(result) == 2
     assert result["a@e.com"].name == "Alice"
     assert result["b@e.com"].name == "Bob"
-    assert result["a@e.com"].commit_count == 1
-    assert result["b@e.com"].commit_count == 1
+    assert len(result["a@e.com"].commits) == 1
+    assert len(result["b@e.com"].commits) == 1
 
 
 def test_compute_repo_analysis_totals():

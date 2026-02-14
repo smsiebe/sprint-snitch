@@ -121,10 +121,8 @@ def _render_single_contributor(cs: ContributorSummary) -> str:
         _render_metrics_table(
             ["Metric", "Value"],
             [
-                ["Commits", str(m.commit_count)],
                 ["Lines added", f"+{m.lines_added}"],
                 ["Lines removed", f"-{m.lines_removed}"],
-                ["Files touched", str(len(m.files_touched))],
             ],
         ),
     ]
@@ -138,14 +136,6 @@ def _render_activity_overview(report: SprintReport) -> str:
     if not report.contributors:
         return ""
     lines = ["## Activity Overview"]
-
-    # Commits per contributor
-    commit_data = {
-        cs.name: cs.metrics.commit_count for cs in report.contributors
-    }
-    if any(v > 0 for v in commit_data.values()):
-        lines.append("")
-        lines.append(_render_ascii_bar_chart(commit_data, "Commits per Contributor"))
 
     # Lines changed per contributor
     lines_data = {
@@ -199,19 +189,6 @@ def _render_file_type_breakdown(report: SprintReport) -> str:
         if any(v > 0 for v in chart_data.values()):
             parts.append(_render_ascii_bar_chart(chart_data, "Lines Changed by File Type"))
 
-    # Per-contributor file type summary
-    contributor_parts = []
-    for cs in report.contributors:
-        if cs.metrics.file_type_breakdown:
-            types = ", ".join(
-                f"{b.file_type} (+{b.lines_added}/-{b.lines_removed})"
-                for b in cs.metrics.file_type_breakdown[:5]
-            )
-            contributor_parts.append(f"**{_escape_md(cs.name)}:** {types}")
-    if contributor_parts:
-        parts.append("### Per Contributor")
-        parts.extend(contributor_parts)
-
     return "\n\n".join(parts)
 
 
@@ -239,18 +216,6 @@ def _render_commit_categories(report: SprintReport) -> str:
         chart_data = {c.category: c.count for c in categories}
         if any(v > 0 for v in chart_data.values()):
             parts.append(_render_ascii_bar_chart(chart_data, "Commit Distribution"))
-
-    # Per-contributor inline summary
-    contributor_lines = []
-    for cs in report.contributors:
-        if cs.metrics.commit_categories:
-            cats = ", ".join(
-                f"{c.category}: {c.count}" for c in cs.metrics.commit_categories
-            )
-            contributor_lines.append(f"**{_escape_md(cs.name)}** {cats}")
-    if contributor_lines:
-        parts.append("### Per Contributor")
-        parts.extend(contributor_lines)
 
     return "\n\n".join(parts)
 
@@ -354,26 +319,6 @@ def _render_change_type_stats(report: SprintReport) -> str:
         ["Repo", "Added", "Modified", "Deleted", "Renamed"],
         repo_rows,
     ))
-
-    # Per-contributor change types
-    contributor_rows = []
-    for cs in report.contributors:
-        s = cs.metrics.change_type_stats
-        total = s.files_added + s.files_modified + s.files_deleted + s.files_renamed
-        if total > 0:
-            contributor_rows.append([
-                cs.name,
-                str(s.files_added),
-                str(s.files_modified),
-                str(s.files_deleted),
-                str(s.files_renamed),
-            ])
-    if contributor_rows:
-        parts.append("### Per Contributor")
-        parts.append(_render_metrics_table(
-            ["Contributor", "Added", "Modified", "Deleted", "Renamed"],
-            contributor_rows,
-        ))
 
     # Churned files
     all_churned = []

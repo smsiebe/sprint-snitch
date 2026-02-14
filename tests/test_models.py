@@ -51,8 +51,6 @@ def test_commit_info_defaults():
 
 def test_author_metrics_empty():
     am = AuthorMetrics(name="Bob", email="bob@example.com")
-    assert am.commit_count == 0
-    assert am.files_touched == []
     assert am.lines_added == 0
     assert am.lines_removed == 0
     assert am.commits == []
@@ -60,8 +58,8 @@ def test_author_metrics_empty():
 
 def test_repo_analysis_stores_authors():
     now = datetime.now()
-    am1 = AuthorMetrics(name="Alice", email="alice@example.com", commit_count=3)
-    am2 = AuthorMetrics(name="Bob", email="bob@example.com", commit_count=5)
+    am1 = AuthorMetrics(name="Alice", email="alice@example.com", lines_added=30)
+    am2 = AuthorMetrics(name="Bob", email="bob@example.com", lines_added=50)
     ra = RepoAnalysis(
         repo_url="https://github.com/org/repo",
         repo_name="repo",
@@ -69,8 +67,8 @@ def test_repo_analysis_stores_authors():
         date_to=now,
         authors={"alice@example.com": am1, "bob@example.com": am2},
     )
-    assert ra.authors["alice@example.com"].commit_count == 3
-    assert ra.authors["bob@example.com"].commit_count == 5
+    assert ra.authors["alice@example.com"].lines_added == 30
+    assert ra.authors["bob@example.com"].lines_added == 50
 
 
 def test_contributor_summary_empty_qualitative():
@@ -81,7 +79,7 @@ def test_contributor_summary_empty_qualitative():
 
 def test_sprint_report_to_dict_serializable():
     now = datetime(2025, 1, 15, 10, 30)
-    am = AuthorMetrics(name="Alice", email="alice@example.com", commit_count=2)
+    am = AuthorMetrics(name="Alice", email="alice@example.com", lines_added=2)
     ra = RepoAnalysis(
         repo_url="https://github.com/org/repo",
         repo_name="repo",

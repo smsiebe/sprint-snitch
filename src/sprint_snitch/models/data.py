@@ -69,6 +69,15 @@ class ChurnedFile:
 
 
 @dataclass
+class DiscoveredIdentity:
+    """A unique (name, email) pair found across extracted commits."""
+
+    name: str
+    email: str
+    commit_count: int = 0
+
+
+@dataclass
 class CommitInfo:
     """A single parsed git commit."""
 
@@ -89,15 +98,9 @@ class AuthorMetrics:
 
     name: str
     email: str
-    commit_count: int = 0
-    files_touched: list[str] = field(default_factory=list)
     lines_added: int = 0
     lines_removed: int = 0
     commits: list[CommitInfo] = field(default_factory=list)
-    file_type_breakdown: list[FileTypeBreakdown] = field(default_factory=list)
-    commit_categories: list[CommitCategory] = field(default_factory=list)
-    daily_activity: list[DailyActivity] = field(default_factory=list)
-    change_type_stats: ChangeTypeStats = field(default_factory=ChangeTypeStats)
 
 
 @dataclass

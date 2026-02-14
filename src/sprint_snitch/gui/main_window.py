@@ -153,6 +153,7 @@ class SprintSnitchWindow(QMainWindow):
         self._worker.progress.connect(self._progress_panel.on_progress)
         self._worker.repo_cloned.connect(self._progress_panel.on_repo_cloned)
         self._worker.repo_analyzed.connect(self._progress_panel.on_repo_analyzed)
+        self._worker.identities_discovered.connect(self._on_identities_discovered)
         self._worker.llm_progress.connect(self._progress_panel.on_llm_progress)
         self._worker.model_tried.connect(self._progress_panel.on_model_tried)
 
@@ -167,6 +168,18 @@ class SprintSnitchWindow(QMainWindow):
         self._thread.finished.connect(self._cleanup_thread)
 
         self._thread.start()
+
+    def _on_identities_discovered(self, identities, all_commits) -> None:
+        """Show the contributor reconciliation dialog, then resume the worker."""
+        from sprint_snitch.gui.contributor_dialog import ContributorReconciliationDialog
+
+        self._status_bar.showMessage("Review contributors...")
+        dialog = ContributorReconciliationDialog(identities, parent=self)
+        dialog.exec()
+        mapping = dialog.get_mapping()
+        if self._worker:
+            self._worker.set_identity_mapping(mapping)
+        self._status_bar.showMessage("Analysis in progress...")
 
     def _on_finished(self, report: SprintReport) -> None:
         """Handle successful pipeline completion."""
@@ -188,6 +201,9 @@ class SprintSnitchWindow(QMainWindow):
     def _on_cancel(self) -> None:
         """Cancel a running analysis (Escape key or Cancel button)."""
         if self._thread and self._thread.isRunning():
+            # Unblock the worker if it's waiting for identity reconciliation.
+            if self._worker:
+                self._worker.set_identity_mapping({})
             self._thread.quit()
             self._thread.wait(5000)
             self._cleanup_thread()

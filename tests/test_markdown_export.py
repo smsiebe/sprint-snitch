@@ -34,8 +34,7 @@ def _make_report(**kwargs):
 
 def _make_full_report():
     am = AuthorMetrics(
-        name="Alice", email="a@e.com", commit_count=5,
-        files_touched=["main.py", "utils.py"], lines_added=200, lines_removed=50,
+        name="Alice", email="a@e.com", lines_added=200, lines_removed=50,
     )
     analysis = RepoAnalysis(
         repo_url="https://github.com/org/myrepo",
@@ -86,8 +85,8 @@ def test_render_contributor_table():
     report = _make_full_report()
     md = render_markdown(report)
     assert "| Metric | Value |" in md
-    assert "| Commits | 5 |" in md
     assert "+200" in md
+    assert "-50" in md
 
 
 def test_render_ascii_chart_basic():
@@ -137,7 +136,7 @@ def test_render_missing_narrative():
 
 
 def test_render_special_characters():
-    am = AuthorMetrics(name="O'Brien|Jr*", email="o@e.com", commit_count=1)
+    am = AuthorMetrics(name="O'Brien|Jr*", email="o@e.com")
     cs = ContributorSummary(name="O'Brien|Jr*", email="o@e.com", metrics=am)
     report = _make_report(contributors=[cs])
     md = render_markdown(report)
@@ -164,21 +163,7 @@ def test_save_markdown_writes_file(tmp_path):
 def _make_enriched_report():
     """Build a report with enrichment data populated."""
     am = AuthorMetrics(
-        name="Alice", email="a@e.com", commit_count=5,
-        files_touched=["main.py", "utils.py"], lines_added=200, lines_removed=50,
-        file_type_breakdown=[
-            FileTypeBreakdown("Python", ".py", 2, 180, 40, 4),
-            FileTypeBreakdown("Documentation", ".md", 1, 20, 10, 1),
-        ],
-        commit_categories=[
-            CommitCategory("feat", 3),
-            CommitCategory("fix", 2),
-        ],
-        daily_activity=[
-            DailyActivity(datetime(2025, 1, 6), 3, 100, 20, ["a@e.com"]),
-            DailyActivity(datetime(2025, 1, 7), 2, 100, 30, ["a@e.com"]),
-        ],
-        change_type_stats=ChangeTypeStats(files_added=1, files_modified=3, files_deleted=0, files_renamed=0),
+        name="Alice", email="a@e.com", lines_added=200, lines_removed=50,
     )
     analysis = RepoAnalysis(
         repo_url="https://github.com/org/myrepo",

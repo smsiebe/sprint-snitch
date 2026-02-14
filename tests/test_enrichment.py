@@ -289,7 +289,6 @@ def test_enrich_repo_analysis_populates_all():
     commit = _commit("abc", "feat: add main", datetime(2025, 1, 10, 14, 0), [fc])
     author = AuthorMetrics(
         name="Alice", email="alice@example.com",
-        commit_count=1, files_touched=["src/main.py"],
         lines_added=10, lines_removed=2, commits=[commit],
     )
     analysis = RepoAnalysis(
@@ -311,9 +310,4 @@ def test_enrich_repo_analysis_populates_all():
     assert analysis.peak_day is not None
     assert analysis.weekday_commits + analysis.weekend_commits == 1
     assert analysis.change_type_stats.files_modified == 1
-
-    # Author-level
-    assert len(author.file_type_breakdown) > 0
-    assert len(author.commit_categories) > 0
-    assert len(author.daily_activity) == 14
     assert commit.category == "feat"

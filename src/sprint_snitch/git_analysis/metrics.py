@@ -33,15 +33,9 @@ def compute_author_metrics(commits: list[CommitInfo]) -> dict[str, AuthorMetrics
             )
 
         author = authors[email]
-        author.commit_count += 1
         author.lines_added += commit.lines_added
         author.lines_removed += commit.lines_removed
         author.commits.append(commit)
-
-        # Collect unique file paths touched by this author.
-        for file_change in commit.files:
-            if file_change.path not in author.files_touched:
-                author.files_touched.append(file_change.path)
 
     return authors
 

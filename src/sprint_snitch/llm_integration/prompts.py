@@ -226,25 +226,6 @@ def build_contributor_prompt(
         file_blocks.append(f"--- {path} ---\n{truncated}")
     file_section = "\n\n".join(file_blocks) or "(no file contents available)"
 
-    # -- Analytics context (from enrichment) -----------------------------------
-    analytics_sections = ""
-
-    if metrics.file_type_breakdown:
-        ft_ctx = _format_file_type_context(metrics.file_type_breakdown)
-        analytics_sections += f"\n## Work by File Type\n{ft_ctx}\n"
-
-    if metrics.commit_categories:
-        cat_ctx = _format_commit_category_context(metrics.commit_categories)
-        analytics_sections += f"\n## Commit Categories\n{cat_ctx}\n"
-
-    ct_total = (metrics.change_type_stats.files_added +
-                metrics.change_type_stats.files_modified +
-                metrics.change_type_stats.files_deleted +
-                metrics.change_type_stats.files_renamed)
-    if ct_total > 0:
-        ct_ctx = _format_change_type_context(metrics.change_type_stats, [])
-        analytics_sections += f"\n## Change Types\n{ct_ctx}\n"
-
     return (
         f"You are an engineering manager reviewing sprint contributions.\n"
         f"\n"
@@ -255,11 +236,8 @@ def build_contributor_prompt(
         f"scope and impact of their contributions.\n"
         f"\n"
         f"## Quantitative Metrics\n"
-        f"- Commits: {metrics.commit_count}\n"
         f"- Lines added: {metrics.lines_added}\n"
         f"- Lines removed: {metrics.lines_removed}\n"
-        f"- Files touched: {len(metrics.files_touched)}\n"
-        f"{analytics_sections}"
         f"\n"
         f"## Commit Log\n"
         f"{commit_log}\n"
@@ -300,7 +278,7 @@ def build_repo_prompt(
     author_lines: list[str] = []
     for email, am in analysis.authors.items():
         author_lines.append(
-            f"  - {am.name} <{email}>: {am.commit_count} commits, "
+            f"  - {am.name} <{email}>: "
             f"+{am.lines_added}/-{am.lines_removed}"
         )
     author_section = "\n".join(author_lines) or "  (no authors)"

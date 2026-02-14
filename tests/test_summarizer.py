@@ -22,8 +22,8 @@ def _make_author(name="Alice", email="a@e.com"):
         lines_added=10, lines_removed=2,
     )
     return AuthorMetrics(
-        name=name, email=email, commit_count=1,
-        files_touched=["main.py"], lines_added=10, lines_removed=2,
+        name=name, email=email,
+        lines_added=10, lines_removed=2,
         commits=[commit],
     )
 

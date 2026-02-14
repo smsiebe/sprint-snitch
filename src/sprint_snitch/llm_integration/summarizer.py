@@ -204,10 +204,11 @@ class SprintSummarizer:
                 )
 
                 # Build contributor-specific file context (only their files).
+                author_paths = {fc.path for c in author.commits for fc in c.files}
                 author_files = {
                     path: content
                     for path, content in file_contents.items()
-                    if path in author.files_touched
+                    if path in author_paths
                 }
                 summary_text = self.summarize_contributor(author, author_files)
 

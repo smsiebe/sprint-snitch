@@ -198,10 +198,8 @@ def _render_single_contributor(cs: ContributorSummary) -> str:
         _render_html_table(
             ["Metric", "Value"],
             [
-                ["Commits", str(m.commit_count)],
                 ["Lines added", f"+{m.lines_added}"],
                 ["Lines removed", f"-{m.lines_removed}"],
-                ["Files touched", str(len(m.files_touched))],
             ],
         ),
     ]
@@ -214,12 +212,6 @@ def _render_html_activity_overview(report: SprintReport) -> str:
     if not report.contributors:
         return ""
     parts = ["<h2>Activity Overview</h2>"]
-
-    commit_data = {
-        cs.name: cs.metrics.commit_count for cs in report.contributors
-    }
-    if any(v > 0 for v in commit_data.values()):
-        parts.append(_render_html_bar_chart(commit_data, "Commits per Contributor"))
 
     lines_data = {
         cs.name: cs.metrics.lines_added + cs.metrics.lines_removed
@@ -263,19 +255,6 @@ def _render_html_file_type_breakdown(report: SprintReport) -> str:
         if any(v > 0 for v in chart_data.values()):
             parts.append(_render_html_bar_chart(chart_data, "Lines Changed by File Type"))
 
-    # Per-contributor inline summary
-    contrib_parts = []
-    for cs in report.contributors:
-        if cs.metrics.file_type_breakdown:
-            types = ", ".join(
-                f"{b.file_type} (+{b.lines_added}/-{b.lines_removed})"
-                for b in cs.metrics.file_type_breakdown[:5]
-            )
-            contrib_parts.append(f"<p><b>{_escape(cs.name)}:</b> {_escape(types)}</p>")
-    if contrib_parts:
-        parts.append("<h3>Per Contributor</h3>")
-        parts.extend(contrib_parts)
-
     return "\n".join(parts)
 
 
@@ -299,20 +278,6 @@ def _render_html_commit_categories(report: SprintReport) -> str:
         chart_data = {c.category: c.count for c in categories}
         if any(v > 0 for v in chart_data.values()):
             parts.append(_render_html_bar_chart(chart_data, "Commit Distribution"))
-
-    # Per-contributor inline summary
-    contrib_lines = []
-    for cs in report.contributors:
-        if cs.metrics.commit_categories:
-            cats = ", ".join(
-                f"{c.category}: {c.count}" for c in cs.metrics.commit_categories
-            )
-            contrib_lines.append(
-                f"<p><b>{_escape(cs.name)}</b> {_escape(cats)}</p>"
-            )
-    if contrib_lines:
-        parts.append("<h3>Per Contributor</h3>")
-        parts.extend(contrib_lines)
 
     return "\n".join(parts)
 
@@ -405,23 +370,6 @@ def _render_html_change_type_stats(report: SprintReport) -> str:
         ["Repo", "Added", "Modified", "Deleted", "Renamed"],
         repo_rows,
     ))
-
-    # Per-contributor change types
-    contributor_rows = []
-    for cs in report.contributors:
-        s = cs.metrics.change_type_stats
-        total = s.files_added + s.files_modified + s.files_deleted + s.files_renamed
-        if total > 0:
-            contributor_rows.append([
-                cs.name, str(s.files_added), str(s.files_modified),
-                str(s.files_deleted), str(s.files_renamed),
-            ])
-    if contributor_rows:
-        parts.append("<h3>Per Contributor</h3>")
-        parts.append(_render_html_table(
-            ["Contributor", "Added", "Modified", "Deleted", "Renamed"],
-            contributor_rows,
-        ))
 
     # Churned files
     all_churned = []

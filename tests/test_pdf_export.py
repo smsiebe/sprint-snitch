@@ -43,8 +43,7 @@ def _make_report(**kwargs):
 
 def _make_full_report():
     am = AuthorMetrics(
-        name="Alice", email="a@e.com", commit_count=5,
-        files_touched=["main.py", "utils.py"], lines_added=200, lines_removed=50,
+        name="Alice", email="a@e.com", lines_added=200, lines_removed=50,
     )
     analysis = RepoAnalysis(
         repo_url="https://github.com/org/myrepo",
@@ -79,23 +78,7 @@ def _make_full_report():
 def _make_enriched_report():
     """Build a report with enrichment data populated."""
     am = AuthorMetrics(
-        name="Alice", email="a@e.com", commit_count=5,
-        files_touched=["main.py", "utils.py"], lines_added=200, lines_removed=50,
-        file_type_breakdown=[
-            FileTypeBreakdown("Python", ".py", 2, 180, 40, 4),
-            FileTypeBreakdown("Documentation", ".md", 1, 20, 10, 1),
-        ],
-        commit_categories=[
-            CommitCategory("feat", 3),
-            CommitCategory("fix", 2),
-        ],
-        daily_activity=[
-            DailyActivity(datetime(2025, 1, 6), 3, 100, 20, ["a@e.com"]),
-            DailyActivity(datetime(2025, 1, 7), 2, 100, 30, ["a@e.com"]),
-        ],
-        change_type_stats=ChangeTypeStats(
-            files_added=1, files_modified=3, files_deleted=0, files_renamed=0,
-        ),
+        name="Alice", email="a@e.com", lines_added=200, lines_removed=50,
     )
     analysis = RepoAnalysis(
         repo_url="https://github.com/org/myrepo",
@@ -256,7 +239,7 @@ def test_render_html_activity_overview():
     report = _make_full_report()
     html = render_html(report)
     assert "<h2>Activity Overview</h2>" in html
-    assert "Commits per Contributor" in html
+    assert "Lines Changed per Contributor" in html
 
 
 def test_render_html_footer():
@@ -290,7 +273,7 @@ def test_render_html_empty_report():
 
 
 def test_render_html_special_characters():
-    am = AuthorMetrics(name="O'Brien<>&\"", email="o@e.com", commit_count=1)
+    am = AuthorMetrics(name="O'Brien<>&\"", email="o@e.com")
     cs = ContributorSummary(name="O'Brien<>&\"", email="o@e.com", metrics=am)
     report = _make_report(contributors=[cs])
     html = render_html(report)

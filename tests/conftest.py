@@ -52,8 +52,6 @@ def sample_author_metrics(sample_commit_info):
     return AuthorMetrics(
         name="Alice Smith",
         email="alice@example.com",
-        commit_count=3,
-        files_touched=["src/main.py", "src/utils.py", "tests/test_main.py"],
         lines_added=60,
         lines_removed=12,
         commits=[sample_commit_info],
@@ -65,8 +63,6 @@ def sample_repo_analysis(sample_commit_info, sample_author_metrics):
     bob = AuthorMetrics(
         name="Bob Jones",
         email="bob@example.com",
-        commit_count=2,
-        files_touched=["src/api.py"],
         lines_added=40,
         lines_removed=5,
     )

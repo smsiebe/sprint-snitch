@@ -7,8 +7,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sprint_snitch.git_analysis.diff_extractor import (
+    _apply_change_types,
     _enrich_with_file_content,
     _parse_git_log,
+    _parse_name_status_output,
     _parse_numstat_line,
     extract_commits,
 )
@@ -114,7 +116,7 @@ def test_parse_numstat_rename():
 
 
 def test_extract_commits_date_args():
-    """Verify the git command is constructed with correct date arguments."""
+    """Verify the git commands are constructed with correct date arguments."""
     with patch("sprint_snitch.git_analysis.diff_extractor.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         with patch("sprint_snitch.git_analysis.diff_extractor._enrich_with_file_content"):
@@ -123,12 +125,16 @@ def test_extract_commits_date_args():
                 datetime(2025, 1, 1),
                 datetime(2025, 1, 14),
             )
-    args = mock_run.call_args[0][0]
-    # Should have --after=2025-01-01 and --before=2025-01-15 (date_to + 1 day)
-    after_arg = [a for a in args if a.startswith("--after=")][0]
-    before_arg = [a for a in args if a.startswith("--before=")][0]
+    # First call is --numstat, second is --name-status
+    assert mock_run.call_count == 2
+    numstat_args = mock_run.call_args_list[0][0][0]
+    after_arg = [a for a in numstat_args if a.startswith("--after=")][0]
+    before_arg = [a for a in numstat_args if a.startswith("--before=")][0]
     assert "2025-01-01" in after_arg
     assert "2025-01-15" in before_arg
+    # Verify second call uses --name-status
+    name_status_args = mock_run.call_args_list[1][0][0]
+    assert "--name-status" in name_status_args
 
 
 def test_enrich_with_file_content():
@@ -170,3 +176,86 @@ def test_enrich_binary_file():
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="not a text file")
         _enrich_with_file_content(Path("/fake"), [commit])
     assert fc.content == "(binary file)"
+
+
+# ---------------------------------------------------------------------------
+# Change type detection tests
+# ---------------------------------------------------------------------------
+
+_NAME_STATUS_OUTPUT = """\
+COMMIT_SEP
+sha:aaa111
+
+A\tfile_new.py
+M\tfile_existing.py
+D\tfile_old.py
+
+COMMIT_SEP
+sha:bbb222
+
+R100\told_name.py\tnew_name.py
+M\tfile_existing.py
+"""
+
+
+def test_parse_name_status_basic():
+    result = _parse_name_status_output(_NAME_STATUS_OUTPUT)
+    assert result[("aaa111", "file_new.py")] == "added"
+    assert result[("aaa111", "file_existing.py")] == "modified"
+    assert result[("aaa111", "file_old.py")] == "deleted"
+    assert result[("bbb222", "new_name.py")] == "renamed"
+    assert result[("bbb222", "file_existing.py")] == "modified"
+
+
+def test_parse_name_status_empty():
+    assert _parse_name_status_output("") == {}
+
+
+def test_parse_name_status_copy():
+    output = "COMMIT_SEP\nsha:abc123\n\nC100\tsrc.py\tdest.py\n"
+    result = _parse_name_status_output(output)
+    assert result[("abc123", "dest.py")] == "added"
+
+
+def test_apply_change_types():
+    fc1 = FileChange(path="new.py", lines_added=10, lines_removed=0, change_type="modified")
+    fc2 = FileChange(path="old.py", lines_added=0, lines_removed=5, change_type="modified")
+    fc3 = FileChange(path="edit.py", lines_added=3, lines_removed=1, change_type="modified")
+    commit = CommitInfo(
+        sha="abc123", author_name="A", author_email="a@e.com",
+        message="test", timestamp=datetime.now(), files=[fc1, fc2, fc3],
+    )
+    change_map = {
+        ("abc123", "new.py"): "added",
+        ("abc123", "old.py"): "deleted",
+        # edit.py intentionally missing — should keep "modified" default
+    }
+    _apply_change_types([commit], change_map)
+    assert fc1.change_type == "added"
+    assert fc2.change_type == "deleted"
+    assert fc3.change_type == "modified"
+
+
+def test_apply_change_types_empty_map():
+    """With an empty map (e.g. graceful degradation), change_type stays as-is."""
+    fc = FileChange(path="a.py", lines_added=1, lines_removed=0, change_type="modified")
+    commit = CommitInfo(
+        sha="x", author_name="A", author_email="a@e.com",
+        message="m", timestamp=datetime.now(), files=[fc],
+    )
+    _apply_change_types([commit], {})
+    assert fc.change_type == "modified"
+
+
+def test_enrich_deleted_file_skips_git_show():
+    """Deleted files should get '(file deleted)' without calling git show."""
+    fc = FileChange(path="gone.py", lines_added=0, lines_removed=10, change_type="deleted")
+    commit = CommitInfo(
+        sha="abc", author_name="A", author_email="a@e.com",
+        message="remove", timestamp=datetime.now(), files=[fc],
+    )
+    with patch("sprint_snitch.git_analysis.diff_extractor.subprocess.run") as mock_run:
+        _enrich_with_file_content(Path("/fake"), [commit])
+    # git show should not be called for deleted files
+    mock_run.assert_not_called()
+    assert fc.content == "(file deleted)"
